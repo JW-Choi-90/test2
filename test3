@@ -1,0 +1,95 @@
+import numpy as np
+import cv2 as cv
+import os
+import glob
+import numpy.linalg as linalg
+
+import time
+
+tic = time.time()
+
+# filepath = str(path)
+# filepath = input("file path : ")
+filepath = str("C:\\Users\\2063098\\Desktop\\192690\\0521_185481_#1_C")
+# filepath = str("\\\\10.138.126.217\\nand\\z.User\\CJW\\210430_CL_Notch\\0430_170941_#16_T")
+filelist = glob.glob(filepath + "\*.tif")
+
+while os.path.isdir(filepath + "\measured"):
+    input("Remove 'meaured' folder AND PRESS ENTER : ")
+
+def imgflatten3(img):
+    h, w = img.shape
+
+    img = img.T.reshape(1, -1)
+    bias = np.mean(img)
+    img = img - bias
+
+    xtemp = np.arange(1, w + 1)
+    ytemp = np.arange(1, h + 1)
+
+    x = np.tile(xtemp, h).astype(float)
+    y = np.repeat(ytemp, w).astype(float)
+
+    x2 = x * x
+    y2 = y * y
+    xy = x * y
+    x3 = x2 * x
+    y3 = y2 * y
+    x2y = x2 * y
+    xy2 = y2 * x
+
+    A = np.vstack([x2, x, y2, y, xy, x3, y3, x2y, xy2, np.ones(h * w)]).T
+    P = np.dot(linalg.inv(np.dot(A.T, A)), np.dot(A.T, img.T))
+
+    newimg = P[0] * x2 + P[1] * x + P[2] * y2 + P[3] * y + P[4] * xy + P[5] * x3 + P[6] * y3 + P[7] * x2y + P[8] * xy2 + \
+             P[9]
+    img = img - newimg
+
+    scalemax = np.max(img)
+    scalemin = np.min(img)
+
+    img = (img - scalemin) * 230 / (scalemax - scalemin) + 10
+    img = img.astype(np.uint8)
+
+    return img.reshape(w, h).T
+
+
+#######################################MKDIR#########################
+os.mkdir(filepath + "\measured")
+
+rawfile_savecount = int(20)
+image_count = 0
+raw_file_num = str(1)
+
+
+
+for k in range(len(filelist)):
+
+    filename = str(os.path.basename(filelist[k]))
+    print(filename)
+    raw_image_color = cv.imread(filelist[k], cv.IMREAD_COLOR)
+    # raw_image_color = cv.imread(filelist[k], cv.IMREAD_REDUCED_GRAYSCALE_8)
+    # raw_image = cv.cvtColor(raw_image_color, cv.COLOR_BGR2GRAY)
+
+    raw_image = raw_image_color
+
+    rows = raw_image.shape[0]
+    columns = raw_image.shape[1]
+
+    image_count += 1
+
+    #########################image flatten###################
+    # raw_image = imgflatten3(raw_image)
+    # cv.imwrite(os.path.dirname(filelist[k]) + "\\measured\\" + os.path.basename(filelist[k]) + "_imgflatten3.tif", raw_image)
+
+    patch = raw_image[int(rows * 0.45):int(rows * 0.55), int(columns * 0): int(columns * 0.3)]
+    _, patchstd = cv.meanStdDev(patch)
+
+    raw_image = cv.bilateralFilter(raw_image, 20, patchstd[0][0] * 2, 10)
+
+    cv.imwrite(os.path.dirname(filelist[k]) + "\\measured\\" + os.path.basename(filelist[k]), raw_image)
+
+toc = time.time() - tic
+print("Total TAT : ", toc)
+print("TAT/Image : ", toc / len(filelist))
+
